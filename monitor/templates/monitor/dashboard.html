@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Climate Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg: #171b20;
+    --panel: #20262d;
+    --panel-2: #262d35;
+    --line: #333c46;
+    --text: #e9e7df;
+    --text-dim: #8b93a0;
+    --safe: #49b57c;
+    --caution: #e0b039;
+    --warning: #e0813f;
+    --danger: #d6483f;
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family: var(--font-mono);
+    -webkit-font-smoothing:antialiased;
+  }
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 28px; border-bottom:1px solid var(--line);
+    background: repeating-linear-gradient(135deg, #1a1f25 0 12px, #191e23 12px 24px);
+  }
+  header h1{
+    font-family:var(--font-display); font-size:1.25rem; letter-spacing:.02em;
+    margin:0; font-weight:700;
+  }
+  header .tag{
+    color:var(--text-dim); font-size:.72rem; letter-spacing:.08em; text-transform:uppercase;
+  }
+  .interval-picker{ display:flex; align-items:center; gap:8px; font-size:.78rem; color:var(--text-dim);}
+  select{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--line);
+    border-radius:4px; padding:6px 8px; font-family:var(--font-mono); font-size:.78rem;
+  }
+
+  .layout{ padding:24px 28px 60px; max-width:1180px; margin:0 auto; }
+
+  .device-tabs{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px; }
+  .device-tab{
+    padding:8px 14px; border-radius:20px; border:1px solid var(--line);
+    background:var(--panel); color:var(--text-dim); font-size:.78rem; cursor:pointer;
+    display:flex; align-items:center; gap:8px;
+  }
+  .device-tab.active{ border-color:var(--text); color:var(--text); background:var(--panel-2); }
+  .dot{ width:8px; height:8px; border-radius:50%; background:var(--text-dim); }
+  .dot.online{ background:var(--safe); box-shadow:0 0 6px var(--safe); }
+
+  /* --- Signal placard: the signature element, styled like a physical hazard board --- */
+  .placard{
+    border-radius:10px; padding:22px 26px; margin-bottom:22px;
+    border:2px solid var(--line); position:relative; overflow:hidden;
+    background: var(--panel);
+    transition: border-color .3s ease;
+  }
+  .placard::before{
+    content:""; position:absolute; inset:0; opacity:.10;
+    background: repeating-linear-gradient(45deg, currentColor 0 10px, transparent 10px 20px);
+  }
+  /* border/text color is set inline per-reading based on the severity number,
+     since risk levels are fully user-defined (not a fixed 4-level enum) */
+  .placard .row{ position:relative; display:flex; justify-content:space-between; align-items:flex-end; gap:20px; flex-wrap:wrap; }
+  .placard .level{
+    font-family:var(--font-display); font-weight:700; font-size:2rem; letter-spacing:.03em;
+    color:inherit;
+  }
+  .placard .schedule{ font-size:.95rem; color:var(--text); margin-top:6px; }
+  .placard .message{ font-size:.78rem; color:var(--text-dim); margin-top:4px; max-width:520px;}
+  .readouts{ display:flex; gap:26px; }
+  .readout{ text-align:right; }
+  .readout .val{ font-family:var(--font-display); font-size:1.9rem; font-weight:600; color:var(--text);}
+  .readout .unit{ font-size:.9rem; color:var(--text-dim);}
+  .readout .lbl{ font-size:.68rem; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); margin-top:2px;}
+
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:20px 22px; margin-bottom:20px;
+  }
+  .panel h2{
+    font-family:var(--font-display); font-size:.9rem; letter-spacing:.05em; text-transform:uppercase;
+    color:var(--text-dim); margin:0 0 14px;
+  }
+  canvas{ width:100% !important; }
+
+  .meta-row{ display:flex; justify-content:space-between; font-size:.72rem; color:var(--text-dim); margin-top:10px; }
+  .status-line{ display:flex; align-items:center; gap:6px; }
+
+  footer{ text-align:center; color:var(--text-dim); font-size:.7rem; padding:20px; }
+  a { color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Climate Monitor</h1>
+    <div class="tag">Field temperature &amp; humidity signal board</div>
+  </div>
+  <div class="interval-picker">
+    <a href="/thresholds/" style="color:var(--text-dim); text-decoration:none; border:1px solid var(--line); padding:6px 12px; border-radius:4px;">⚙ Επίπεδα &amp; όρια</a>
+    Refresh every
+    <select id="intervalSelect">
+      <option value="5">5 min</option>
+      <option value="10">10 min</option>
+    </select>
+  </div>
+</header>
+
+<div class="layout">
+
+  <div class="device-tabs" id="deviceTabs">
+    {% for device in devices %}
+      <div class="device-tab" data-id="{{ device.id }}" data-name="{{ device.name }}">
+        <span class="dot"></span>{{ device.name }}
+      </div>
+    {% empty %}
+      <div style="color:var(--text-dim); font-size:.85rem;">
+        No devices yet — add one in <a href="/admin/monitor/device/">the admin</a>, then point a sensor at
+        <code>/api/ingest/</code> with its API key.
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="placard" id="placard" style="border-color:var(--text-dim); color:var(--text-dim);">
+    <div class="row">
+      <div>
+        <div class="level" id="placardLevel">WAITING FOR DATA</div>
+        <div class="schedule" id="placardSchedule">&mdash;</div>
+        <div class="message" id="placardMessage">Select a device above once readings start coming in.</div>
+      </div>
+      <div class="readouts">
+        <div class="readout">
+          <div class="val"><span id="tempVal">&mdash;</span><span class="unit">&deg;C</span></div>
+          <div class="lbl">Temperature</div>
+        </div>
+        <div class="readout">
+          <div class="val"><span id="humVal">&mdash;</span><span class="unit">%</span></div>
+          <div class="lbl">Humidity</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Last 2 hours</h2>
+    <canvas id="chart" height="90"></canvas>
+    <div class="meta-row">
+      <div class="status-line"><span class="dot online" id="liveDot"></span><span id="lastUpdated">Waiting for data&hellip;</span></div>
+      <div>Auto-refreshing chart — API: <code>/api/devices/&lt;id&gt;/readings/</code></div>
+    </div>
+  </div>
+
+</div>
+
+<footer>POST readings to <code>/api/ingest/</code> with header <code>X-API-Key</code> · Manage devices, thresholds &amp; recipients in <a href="/admin/">Django admin</a></footer>
+
+<script>
+const LEVEL_COLOR = { SAFE: 'var(--safe)', CAUTION: 'var(--caution)', WARNING: 'var(--warning)', DANGER: 'var(--danger)' };
+
+let currentDeviceId = null;
+let chart = null;
+let pollTimer = null;
+let maxSeverity = 1;
+
+// Risk levels are fully user-defined (add/remove as many as you like in
+// Settings -> Thresholds), so color isn't a fixed enum - it's a smooth
+// gradient from safe-green to danger-red based on how severe the current
+// level is relative to the most severe level you've defined.
+function severityColor(severity, max) {
+  if (severity == null || max <= 0) return '#8b93a0';
+  const ratio = Math.max(0, Math.min(1, severity / max));
+  const hue = 140 - ratio * 140; // 140 = green, 0 = red
+  return `hsl(${hue}, 65%, 55%)`;
+}
+
+async function loadMaxSeverity() {
+  try {
+    const res = await fetch('/api/thresholds/');
+    const levels = await res.json();
+    maxSeverity = levels.reduce((m, l) => Math.max(m, l.severity), 1);
+  } catch (e) { /* keep default */ }
+}
+loadMaxSeverity();
+
+const tabsEl = document.getElementById('deviceTabs');
+const intervalSelect = document.getElementById('intervalSelect');
+
+function selectDevice(id, tabEl) {
+  currentDeviceId = id;
+  document.querySelectorAll('.device-tab').forEach(t => t.classList.remove('active'));
+  if (tabEl) tabEl.classList.add('active');
+  fetchAndRender();
+  restartPolling();
+}
+
+tabsEl.querySelectorAll('.device-tab').forEach(tab => {
+  tab.addEventListener('click', () => selectDevice(tab.dataset.id, tab));
+});
+// auto-select first device
+const firstTab = tabsEl.querySelector('.device-tab');
+if (firstTab) selectDevice(firstTab.dataset.id, firstTab);
+
+function restartPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  const minutes = parseInt(intervalSelect.value, 10);
+  pollTimer = setInterval(fetchAndRender, minutes * 60 * 1000);
+}
+intervalSelect.addEventListener('change', restartPolling);
+
+function initChart() {
+  const ctx = document.getElementById('chart').getContext('2d');
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'Temperature (°C)', data: [], yAxisID: 'y', borderColor: '#e0813f',
+          backgroundColor: 'transparent', tension: .3, pointRadius: 0, borderWidth: 2,
+        },
+        {
+          label: 'Humidity (%)', data: [], yAxisID: 'y1', borderColor: '#4a90c4',
+          backgroundColor: 'transparent', tension: .3, pointRadius: 0, borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { ticks: { color: '#8b93a0', maxRotation: 0 }, grid: { color: '#2a3138' } },
+        y: { position: 'left', ticks: { color: '#e0813f' }, grid: { color: '#2a3138' }, title:{display:true,text:'°C',color:'#8b93a0'} },
+        y1: { position: 'right', ticks: { color: '#4a90c4' }, grid: { display: false }, title:{display:true,text:'%',color:'#8b93a0'} },
+      },
+      plugins: { legend: { labels: { color: '#e9e7df', font: { family: 'JetBrains Mono' } } } },
+    },
+  });
+}
+initChart();
+
+async function fetchAndRender() {
+  if (!currentDeviceId) return;
+  try {
+    const res = await fetch(`/api/devices/${currentDeviceId}/readings/?minutes=120`);
+    const data = await res.json();
+    const readings = data.readings || [];
+
+    chart.data.labels = readings.map(r => new Date(r.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
+    chart.data.datasets[0].data = readings.map(r => r.temperature);
+    chart.data.datasets[1].data = readings.map(r => r.humidity);
+    chart.update();
+
+    const dev = data.device;
+    document.getElementById('tempVal').textContent = dev.last_temperature ?? '—';
+    document.getElementById('humVal').textContent = dev.last_humidity ?? '—';
+
+    const level = dev.last_signal_level || 'Χωρίς δεδομένα';
+    const color = severityColor(dev.last_severity, maxSeverity);
+    const placard = document.getElementById('placard');
+    placard.style.borderColor = color;
+    placard.style.color = color;
+    document.getElementById('placardLevel').textContent = level.toUpperCase();
+    document.getElementById('placardSchedule').textContent = dev.last_schedule || '—';
+    document.getElementById('placardMessage').textContent = dev.last_message || '';
+    document.getElementById('lastUpdated').textContent = dev.last_seen
+      ? `Last reading: ${new Date(dev.last_seen).toLocaleString()}`
+      : 'No readings yet';
+    document.getElementById('liveDot').classList.toggle('online', !!dev.is_online);
+
+    document.querySelectorAll('.device-tab').forEach(t => {
+      if (t.dataset.id == currentDeviceId) t.querySelector('.dot').classList.toggle('online', !!dev.is_online);
+    });
+  } catch (e) {
+    document.getElementById('lastUpdated').textContent = 'Could not reach server.';
+  }
+}
+</script>
+</body>
+</html>

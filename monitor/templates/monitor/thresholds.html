@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Επίπεδα &amp; Όρια — Climate Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#171b20; --panel:#20262d; --panel-2:#262d35; --line:#333c46;
+    --text:#e9e7df; --text-dim:#8b93a0; --accent:#4a90c4; --danger:#d6483f;
+    --font-display:'Space Grotesk', sans-serif; --font-mono:'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:var(--font-mono); -webkit-font-smoothing:antialiased; }
+  header{ display:flex; align-items:center; justify-content:space-between; padding:18px 28px; border-bottom:1px solid var(--line);
+    background: repeating-linear-gradient(135deg, #1a1f25 0 12px, #191e23 12px 24px); }
+  header h1{ font-family:var(--font-display); font-size:1.25rem; margin:0; font-weight:700; }
+  header a{ color:var(--text-dim); text-decoration:none; border:1px solid var(--line); padding:6px 12px; border-radius:4px; font-size:.82rem; }
+  .layout{ padding:24px 28px 80px; max-width:900px; margin:0 auto; }
+  p.hint{ color:var(--text-dim); font-size:.85rem; line-height:1.6; }
+
+  .level-card{ background:var(--panel); border:1px solid var(--line); border-left:5px solid var(--accent);
+    border-radius:8px; padding:18px 20px; margin-bottom:16px; }
+  .level-card .top-row{ display:flex; gap:14px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
+  .level-card input[type=text], .level-card input[type=number], .level-card select, .level-card textarea{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--line); border-radius:4px;
+    padding:8px 10px; font-family:var(--font-mono); font-size:.85rem; width:100%;
+  }
+  .level-card textarea{ resize:vertical; min-height:44px; }
+  label{ font-size:.68rem; letter-spacing:.06em; text-transform:uppercase; color:var(--text-dim); display:block; margin-bottom:4px; }
+  .field{ flex:1; min-width:140px; }
+  .field.name{ flex:2; min-width:220px; }
+  .field.small{ max-width:110px; min-width:90px; flex:none; }
+  .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
+  .grid-4{ display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:12px; }
+  .row-bottom{ display:flex; align-items:center; justify-content:space-between; margin-top:6px; }
+  .notify-toggle{ display:flex; align-items:center; gap:8px; font-size:.82rem; color:var(--text-dim); }
+  .notify-toggle input{ width:16px; height:16px; }
+  .actions{ display:flex; gap:10px; }
+  button{ font-family:var(--font-mono); font-size:.8rem; border-radius:4px; padding:8px 14px; cursor:pointer; border:1px solid var(--line); background:var(--panel-2); color:var(--text); }
+  button.save{ border-color:var(--accent); color:var(--accent); }
+  button.delete{ border-color:var(--danger); color:var(--danger); }
+  button.add{ width:100%; padding:14px; border-style:dashed; color:var(--text-dim); margin-top:6px; }
+  .status{ font-size:.72rem; color:var(--text-dim); margin-left:auto; }
+  footer{ text-align:center; color:var(--text-dim); font-size:.7rem; padding:20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Επίπεδα &amp; Όρια</h1>
+  <a href="/">← Πίνακας ελέγχου</a>
+</header>
+
+<div class="layout">
+  <p class="hint">
+    Όρισε όσα επίπεδα επικινδυνότητας θέλεις. Κάθε επίπεδο έχει εύρος θερμοκρασίας/υγρασίας, ένα πρόγραμμα
+    διαλείμματος, και ένα τικ που καθορίζει αν θα στέλνεται ειδοποίηση (Viber/SMS) όταν ενεργοποιείται.
+    Όταν μια μέτρηση ταιριάζει σε παραπάνω από ένα επίπεδο, κερδίζει αυτό με τη μεγαλύτερη «σοβαρότητα».
+  </p>
+
+  <div id="levelsContainer"></div>
+  <button class="add" id="addLevelBtn">+ Προσθήκη νέου επιπέδου</button>
+</div>
+
+<footer>Οι αλλαγές αποθηκεύονται στο <code>/api/thresholds/</code> και ισχύουν αμέσως για τις επόμενες μετρήσεις.</footer>
+
+<script>
+const PRESETS = [
+  "Συνεχής εργασία",
+  "15 λεπτά διάλειμμα ανά ώρα",
+  "Μισή ώρα διάλειμμα",
+  "45 λεπτά διάλειμμα",
+  "Απαγόρευση εργασίας",
+];
+
+function getCookie(name) {
+  const match = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+  return match ? match.pop() : '';
+}
+const csrftoken = getCookie('csrftoken');
+
+const container = document.getElementById('levelsContainer');
+
+function levelTemplate(level) {
+  const id = level.id ?? `new-${Date.now()}`;
+  const isPreset = PRESETS.includes(level.work_break_schedule);
+  return `
+    <div class="level-card" data-id="${id}" data-saved="${level.id ? '1' : '0'}">
+      <div class="top-row">
+        <div class="field name">
+          <label>Όνομα επιπέδου</label>
+          <input type="text" class="f-name" value="${level.name ?? ''}" placeholder="π.χ. Επίπεδο 2 - Ήπιος κίνδυνος">
+        </div>
+        <div class="field small">
+          <label>Σοβαρότητα</label>
+          <input type="number" class="f-severity" min="1" value="${level.severity ?? 1}">
+        </div>
+      </div>
+      <div class="grid-4">
+        <div class="field"><label>Ελάχ. Θερμοκρασία (°C)</label><input type="number" step="0.1" class="f-mintemp" value="${level.min_temperature ?? ''}"></div>
+        <div class="field"><label>Μέγ. Θερμοκρασία (°C)</label><input type="number" step="0.1" class="f-maxtemp" value="${level.max_temperature ?? ''}"></div>
+        <div class="field"><label>Ελάχ. Υγρασία (%)</label><input type="number" step="0.1" class="f-minhum" value="${level.min_humidity ?? ''}"></div>
+        <div class="field"><label>Μέγ. Υγρασία (%)</label><input type="number" step="0.1" class="f-maxhum" value="${level.max_humidity ?? ''}"></div>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label>Πρόγραμμα διαλείμματος</label>
+          <select class="f-schedule-preset">
+            ${PRESETS.map(p => `<option value="${p}" ${p === level.work_break_schedule ? 'selected' : ''}>${p}</option>`).join('')}
+            <option value="__custom__" ${!isPreset && level.work_break_schedule ? 'selected' : ''}>Προσαρμοσμένο…</option>
+          </select>
+          <input type="text" class="f-schedule-custom" style="margin-top:6px; ${isPreset ? 'display:none;' : ''}"
+                 value="${!isPreset ? (level.work_break_schedule ?? '') : ''}" placeholder="Γράψε το δικό σου πρόγραμμα">
+        </div>
+        <div class="field">
+          <label>Μήνυμα ειδοποίησης</label>
+          <textarea class="f-message" placeholder="Κείμενο που θα σταλεί στο Viber/SMS">${level.message ?? ''}</textarea>
+        </div>
+      </div>
+      <div class="row-bottom">
+        <label class="notify-toggle">
+          <input type="checkbox" class="f-notify" ${level.notify !== false ? 'checked' : ''}>
+          Αποστολή ειδοποίησης (Viber/SMS) σε αυτό το επίπεδο
+        </label>
+        <div class="actions">
+          <span class="status"></span>
+          <button class="save">Αποθήκευση</button>
+          <button class="delete">Διαγραφή</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function attachCardHandlers(card) {
+  const presetSelect = card.querySelector('.f-schedule-preset');
+  const customInput = card.querySelector('.f-schedule-custom');
+  presetSelect.addEventListener('change', () => {
+    customInput.style.display = presetSelect.value === '__custom__' ? '' : 'none';
+  });
+
+  card.querySelector('.save').addEventListener('click', () => saveCard(card));
+  card.querySelector('.delete').addEventListener('click', () => deleteCard(card));
+}
+
+function collectPayload(card) {
+  const presetSelect = card.querySelector('.f-schedule-preset');
+  const schedule = presetSelect.value === '__custom__'
+    ? card.querySelector('.f-schedule-custom').value
+    : presetSelect.value;
+
+  const numOrNull = (v) => (v === '' ? null : parseFloat(v));
+
+  return {
+    name: card.querySelector('.f-name').value,
+    severity: parseInt(card.querySelector('.f-severity').value || '1', 10),
+    min_temperature: numOrNull(card.querySelector('.f-mintemp').value),
+    max_temperature: numOrNull(card.querySelector('.f-maxtemp').value),
+    min_humidity: numOrNull(card.querySelector('.f-minhum').value),
+    max_humidity: numOrNull(card.querySelector('.f-maxhum').value),
+    work_break_schedule: schedule,
+    message: card.querySelector('.f-message').value,
+    notify: card.querySelector('.f-notify').checked,
+  };
+}
+
+async function saveCard(card) {
+  const statusEl = card.querySelector('.status');
+  const payload = collectPayload(card);
+  const saved = card.dataset.saved === '1';
+  const id = card.dataset.id;
+  try {
+    const res = await fetch(saved ? `/api/thresholds/${id}/` : '/api/thresholds/', {
+      method: saved ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    card.dataset.id = data.id;
+    card.dataset.saved = '1';
+    statusEl.textContent = 'Αποθηκεύτηκε ✓';
+    setTimeout(() => (statusEl.textContent = ''), 2000);
+  } catch (e) {
+    statusEl.textContent = 'Σφάλμα αποθήκευσης';
+  }
+}
+
+async function deleteCard(card) {
+  const saved = card.dataset.saved === '1';
+  if (saved) {
+    if (!confirm('Διαγραφή αυτού του επιπέδου;')) return;
+    try {
+      await fetch(`/api/thresholds/${card.dataset.id}/`, {
+        method: 'DELETE',
+        headers: { 'X-CSRFToken': csrftoken },
+      });
+    } catch (e) { /* ignore, still remove from view */ }
+  }
+  card.remove();
+}
+
+async function loadLevels() {
+  const res = await fetch('/api/thresholds/');
+  const levels = await res.json();
+  container.innerHTML = '';
+  levels.sort((a, b) => a.severity - b.severity).forEach(level => {
+    container.insertAdjacentHTML('beforeend', levelTemplate(level));
+  });
+  container.querySelectorAll('.level-card').forEach(attachCardHandlers);
+}
+
+document.getElementById('addLevelBtn').addEventListener('click', () => {
+  const nextSeverity = container.querySelectorAll('.level-card').length + 1;
+  container.insertAdjacentHTML('beforeend', levelTemplate({ severity: nextSeverity, notify: true }));
+  const newCard = container.lastElementChild;
+  attachCardHandlers(newCard);
+  newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
+loadLevels();
+</script>
+</body>
+</html>
