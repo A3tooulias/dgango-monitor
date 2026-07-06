@@ -1,5 +1,4 @@
 from django.contrib import admin
-from django.contrib.auth.models import Group, User
 from django.shortcuts import render
 from django.urls import path, reverse
 from django.utils.html import format_html
@@ -8,10 +7,10 @@ from .csv_import import CsvImportError, import_rows_for_device, parse_csv
 from .models import Device, NotificationLog, Recipient
 from .services import send_sms
 
-# Αφαιρούμε προσωρινά τα Users/Groups από το admin index (θα τα ξαναβάλουμε
-# αν/όταν χρειαστεί πολλαπλούς λογαριασμούς διαχειριστών).
-admin.site.unregister(User)
-admin.site.unregister(Group)
+# --- Branding: αντί για το γενικό "Django administration" παντού ---
+admin.site.site_header = "Climate Monitor — Διαχείριση"
+admin.site.site_title = "Climate Monitor"
+admin.site.index_title = "Συσκευές & Παραλήπτες SMS"
 
 # Σκόπιμα ΔΕΝ καταχωρούνται εδώ τα RiskLevel, HeatIndexRow, Reading (και το
 # NotificationLog δεν έχει δικό του top-level admin):
@@ -27,6 +26,10 @@ class DeviceAdmin(admin.ModelAdmin):
         css = {"all": ("monitor/admin_extra.css",)}
 
     list_display = ["name", "location", "is_active", "is_online", "last_seen", "last_temperature", "last_humidity", "last_signal_level", "csv_upload_link"]
+    list_filter = ["is_active"]
+    search_fields = ["name", "location", "ecowitt_passkey"]
+    ordering = ["name"]
+    list_per_page = 25
     readonly_fields = [
         "api_key", "usage_hint",
         "last_seen", "last_temperature", "last_humidity", "last_signal_level", "last_severity",
@@ -142,6 +145,9 @@ class RecipientAdmin(admin.ModelAdmin):
         css = {"all": ("monitor/admin_extra.css",)}
 
     list_display = ["name", "phone_number", "device_list", "receive_sms", "is_active", "test_sms_link"]
+    list_filter = ["is_active", "receive_sms"]
+    search_fields = ["name", "phone_number"]
+    ordering = ["name"]
     filter_horizontal = ["devices"]
     fieldsets = (
         (None, {

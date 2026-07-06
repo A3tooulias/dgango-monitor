@@ -122,11 +122,28 @@ DEVICE_OFFLINE_AFTER_MINUTES = int(os.environ.get("DEVICE_OFFLINE_AFTER_MINUTES"
 # πουθενά. Με αυτό, θα τα βλέπεις ζωντανά στην ίδια κονσόλα που τρέχει
 # το `python manage.py runserver`.
 # --------------------------------------------------------------------------
+LOGS_DIR = BASE_DIR / "logs"
+LOGS_DIR.mkdir(exist_ok=True)
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {
-        "console": {"class": "logging.StreamHandler"},
+    "formatters": {
+        "with_time": {
+            "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
     },
-    "root": {"handlers": ["console"], "level": "INFO"},
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "with_time"},
+        "file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": LOGS_DIR / "app.log",
+            "maxBytes": 5 * 1024 * 1024,  # 5MB ανά αρχείο
+            "backupCount": 5,  # κρατάει τα τελευταία 5 (άρα ~25MB max συνολικά)
+            "formatter": "with_time",
+            "encoding": "utf-8",
+        },
+    },
+    "root": {"handlers": ["console", "file"], "level": "INFO"},
 }
