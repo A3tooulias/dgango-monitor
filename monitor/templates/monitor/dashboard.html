@@ -88,7 +88,10 @@
   }
   .panel h2{
     font-family:var(--font-display); font-size:.9rem; letter-spacing:.05em; text-transform:uppercase;
-    color:var(--text-dim); margin:0 0 14px;
+    color:var(--text-dim); margin:0;
+  }
+  .panel-header-row{
+    display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; flex-wrap:wrap;
   }
   canvas{ width:100% !important; }
 
@@ -145,7 +148,15 @@
   </div>
 
   <div class="panel">
-    <h2>Τελευταίες 2 ώρες</h2>
+    <div class="panel-header-row">
+      <h2 id="chartTitle">Τελευταίες 2 ώρες</h2>
+      <select id="rangeSelect">
+        <option value="120">Τελευταίες 2 ώρες</option>
+        <option value="360">Τελευταίες 6 ώρες</option>
+        <option value="1440">Τελευταίες 24 ώρες</option>
+        <option value="10080">Τελευταίες 7 μέρες</option>
+      </select>
+    </div>
     <canvas id="chart" height="90"></canvas>
     <div class="meta-row">
       <div class="status-line"><span class="dot" id="liveDot"></span><span id="lastUpdated">Αναμονή δεδομένων&hellip;</span></div>
@@ -249,6 +260,17 @@ intervalSelect.addEventListener('change', restartPolling);
 
 function initChart() {
   const ctx = document.getElementById('chart').getContext('2d');
+
+  // Απαλά gradient γεμίσματα κάτω από τις γραμμές, αντί για επίπεδο χρώμα -
+  // δίνει πιο "ζωντανή", λιγότερο επίπεδη εμφάνιση στο γράφημα.
+  const tempGradient = ctx.createLinearGradient(0, 0, 0, 260);
+  tempGradient.addColorStop(0, 'rgba(224,129,63,0.35)');
+  tempGradient.addColorStop(1, 'rgba(224,129,63,0)');
+
+  const humGradient = ctx.createLinearGradient(0, 0, 0, 260);
+  humGradient.addColorStop(0, 'rgba(74,144,196,0.28)');
+  humGradient.addColorStop(1, 'rgba(74,144,196,0)');
+
   chart = new Chart(ctx, {
     type: 'line',
     data: {
@@ -256,11 +278,13 @@ function initChart() {
       datasets: [
         {
           label: 'Θερμοκρασία (°C)', data: [], yAxisID: 'y', borderColor: '#e0813f',
-          backgroundColor: 'transparent', tension: .3, pointRadius: 0, borderWidth: 2,
+          backgroundColor: tempGradient, fill: true, tension: .35, pointRadius: 0,
+          pointHoverRadius: 4, pointHoverBackgroundColor: '#e0813f', borderWidth: 2.5,
         },
         {
           label: 'Υγρασία (%)', data: [], yAxisID: 'y1', borderColor: '#4a90c4',
-          backgroundColor: 'transparent', tension: .3, pointRadius: 0, borderWidth: 2,
+          backgroundColor: humGradient, fill: true, tension: .35, pointRadius: 0,
+          pointHoverRadius: 4, pointHoverBackgroundColor: '#4a90c4', borderWidth: 2.5,
         },
       ],
     },
@@ -268,11 +292,19 @@ function initChart() {
       responsive: true,
       interaction: { mode: 'index', intersect: false },
       scales: {
-        x: { ticks: { color: '#8b93a0', maxRotation: 0 }, grid: { color: '#2a3138' } },
-        y: { position: 'left', ticks: { color: '#e0813f' }, grid: { color: '#2a3138' }, title:{display:true,text:'°C',color:'#8b93a0'} },
+        x: { ticks: { color: '#8b93a0', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }, grid: { color: '#242b33' } },
+        y: { position: 'left', ticks: { color: '#e0813f' }, grid: { color: '#242b33' }, title:{display:true,text:'°C',color:'#8b93a0'} },
         y1: { position: 'right', ticks: { color: '#4a90c4' }, grid: { display: false }, title:{display:true,text:'%',color:'#8b93a0'} },
       },
-      plugins: { legend: { labels: { color: '#e9e7df', font: { family: 'JetBrains Mono' } } } },
+      plugins: {
+        legend: { labels: { color: '#e9e7df', font: { family: 'JetBrains Mono' }, usePointStyle: true, pointStyle: 'circle' } },
+        tooltip: {
+          backgroundColor: '#20262d', borderColor: '#333c46', borderWidth: 1,
+          titleColor: '#e9e7df', bodyColor: '#e9e7df',
+          titleFont: { family: 'JetBrains Mono' }, bodyFont: { family: 'JetBrains Mono' },
+          padding: 10, boxPadding: 4, usePointStyle: true,
+        },
+      },
     },
   });
 }
