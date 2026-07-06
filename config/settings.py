@@ -4,7 +4,14 @@ Django settings for the Heat Stress / Climate Monitor project.
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Φορτώνει αυτόματα το αρχείο .env (αν υπάρχει) σε environment variables, ώστε
+# να ΜΗΝ χρειάζεται κανένα χειροκίνητο "export" (που ούτως ή άλλως δεν δουλεύει
+# στα Windows) - λειτουργεί ίδια σε Windows/Mac/Linux.
+load_dotenv(BASE_DIR / ".env")
 
 # --------------------------------------------------------------------------
 # Core
@@ -96,14 +103,11 @@ REST_FRAMEWORK = {
 }
 
 # --------------------------------------------------------------------------
-# Notification providers (set these as real environment variables)
+# Notifications (SMS μέσω InfiniReach - infinireach.io, χρησιμοποιεί το δικό
+# σου Android κινητό/SIM ως πύλη SMS, δωρεάν πλάνο διαθέσιμο)
 # --------------------------------------------------------------------------
-VIBER_BOT_AUTH_TOKEN = os.environ.get("VIBER_BOT_AUTH_TOKEN", "")
-VIBER_SENDER_NAME = os.environ.get("VIBER_SENDER_NAME", "Climate Monitor")
-
-TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
-TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
-TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER", "")
+INFINIREACH_API_KEY = os.environ.get("INFINIREACH_API_KEY", "")
+INFINIREACH_FROM_NUMBER = os.environ.get("INFINIREACH_FROM_NUMBER", "")  # ο αριθμός SIM του κινητού σου, π.χ. +35799xxxxxx
 
 # Minimum minutes between two notifications of the SAME signal level for the
 # SAME device, so you don't get spammed every time a reading comes in.
@@ -111,3 +115,35 @@ NOTIFICATION_COOLDOWN_MINUTES = int(os.environ.get("NOTIFICATION_COOLDOWN_MINUTE
 
 # If a device sends nothing for this many minutes, the dashboard marks it offline.
 DEVICE_OFFLINE_AFTER_MINUTES = int(os.environ.get("DEVICE_OFFLINE_AFTER_MINUTES", "10"))
+
+# --------------------------------------------------------------------------
+# Logging - χωρίς αυτό, τα logger.info(...) μέσα στο monitor/views.py και
+# monitor/services.py (π.χ. "Ecowitt: άγνωστο PASSKEY...") ΔΕΝ εμφανίζονται
+# πουθενά. Με αυτό, θα τα βλέπεις ζωντανά στην ίδια κονσόλα που τρέχει
+# το `python manage.py runserver`.
+# --------------------------------------------------------------------------
+LOGS_DIR = BASE_DIR / "logs"
+LOGS_DIR.mkdir(exist_ok=True)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "with_time": {
+            "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "with_time"},
+        "file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": LOGS_DIR / "app.log",
+            "maxBytes": 5 * 1024 * 1024,  # 5MB ανά αρχείο
+            "backupCount": 5,  # κρατάει τα τελευταία 5 (άρα ~25MB max συνολικά)
+            "formatter": "with_time",
+            "encoding": "utf-8",
+        },
+    },
+    "root": {"handlers": ["console", "file"], "level": "INFO"},
+}
