@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Εισαγωγή CSV — {{ device.name }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#171b20; --panel:#20262d; --panel-2:#262d35; --line:#333c46;
+    --text:#e9e7df; --text-dim:#8b93a0; --accent:#4a90c4; --danger:#d6483f; --safe:#49b57c;
+    --font-display:'Space Grotesk', sans-serif; --font-mono:'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:var(--font-mono); -webkit-font-smoothing:antialiased; }
+  header{ display:flex; align-items:center; justify-content:space-between; padding:18px 28px; border-bottom:1px solid var(--line);
+    background: repeating-linear-gradient(135deg, #1a1f25 0 12px, #191e23 12px 24px); }
+  header h1{ font-family:var(--font-display); font-size:1.1rem; margin:0; font-weight:700; }
+  header a{ color:var(--text-dim); text-decoration:none; border:1px solid var(--line); padding:6px 12px; border-radius:4px; font-size:.82rem; }
+  .layout{ padding:24px 28px 60px; max-width:640px; margin:0 auto; }
+  p.hint{ color:var(--text-dim); font-size:.85rem; line-height:1.65; }
+  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:22px; margin-top:16px; }
+  input[type=file]{
+    width:100%; background:var(--panel-2); color:var(--text); border:1px solid var(--line);
+    border-radius:6px; padding:14px; font-family:var(--font-mono); font-size:.85rem; margin:14px 0;
+  }
+  button{
+    background:var(--accent); color:#0e1216; border:none; border-radius:6px; padding:10px 20px;
+    font-family:var(--font-mono); font-weight:700; font-size:.85rem; cursor:pointer;
+  }
+  .result{ margin-top:16px; padding:14px 16px; border-radius:6px; font-size:.85rem; }
+  .result.success{ background:rgba(73,181,124,.12); border:1px solid var(--safe); color:var(--safe); }
+  .result.error{ background:rgba(214,72,63,.12); border:1px solid var(--danger); color:var(--danger); }
+  code{ color:var(--text-dim); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Εισαγωγή CSV — {{ device.name }}</h1>
+  <a href="/admin/monitor/device/">← Πίσω στις συσκευές</a>
+</header>
+
+<div class="layout">
+  <p class="hint">
+    Ανέβασε ένα CSV export (π.χ. από το EasyLog Cloud) για αυτή τη συσκευή. Ο parser αναγνωρίζει
+    αυτόματα τις στήλες θερμοκρασίας, υγρασίας και ημερομηνίας/ώρας — δεν χρειάζεται συγκεκριμένη
+    μορφή στηλών. Κάθε γραμμή θα αξιολογηθεί έναντι του <a href="/thresholds/">πίνακα ορίων σου</a>,
+    και θα σταλεί SMS μόνο για την πιο πρόσφατη μέτρηση (όχι για κάθε ιστορική γραμμή).
+  </p>
+
+  {% if result %}
+    <div class="result success">
+      ✓ Εισήχθησαν <strong>{{ result.count }}</strong> μετρήσεις.
+      {% if result.skipped %}({{ result.skipped }} γραμμές παραλείφθηκαν λόγω κενών/μη έγκυρων τιμών.){% endif %}
+      Δες το <a href="/">γράφημα στην αρχική</a>.
+    </div>
+  {% endif %}
+  {% if error %}
+    <div class="result error">✗ {{ error }}</div>
+  {% endif %}
+
+  <div class="panel">
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <label>Αρχείο CSV</label>
+      <input type="file" name="csv_file" accept=".csv" required>
+      <button type="submit">Εισαγωγή</button>
+    </form>
+  </div>
+
+  <p class="hint" style="margin-top:20px;">
+    Θέλεις το ίδιο από τερματικό αντί για browser;<br>
+    <code>python manage.py import_csv {{ device.id }} /διαδρομή/προς/αρχείο.csv</code>
+  </p>
+</div>
+</body>
+</html>

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Επίπεδα &amp; Όρια — Climate Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#171b20; --panel:#20262d; --panel-2:#262d35; --line:#333c46;
+    --text:#e9e7df; --text-dim:#8b93a0; --accent:#4a90c4; --danger:#d6483f; --safe:#49b57c;
+    --font-display:'Space Grotesk', sans-serif; --font-mono:'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:var(--font-mono); -webkit-font-smoothing:antialiased; }
+  header{ display:flex; align-items:center; justify-content:space-between; padding:18px 28px; border-bottom:1px solid var(--line);
+    background: repeating-linear-gradient(135deg, #1a1f25 0 12px, #191e23 12px 24px); }
+  header h1{ font-family:var(--font-display); font-size:1.25rem; margin:0; font-weight:700; }
+  header a{ color:var(--text-dim); text-decoration:none; border:1px solid var(--line); padding:6px 12px; border-radius:4px; font-size:.82rem; }
+  .layout{ padding:24px 28px 80px; max-width:1000px; margin:0 auto; }
+  p.hint{ color:var(--text-dim); font-size:.85rem; line-height:1.65; }
+  h2.section{ font-family:var(--font-display); font-size:1rem; margin:32px 0 10px; }
+
+  .preset-bar{ margin-bottom:16px; }
+  .preset-btn{ background:var(--panel-2); border:1px solid var(--accent); color:var(--accent); padding:10px 18px;
+    border-radius:6px; font-family:var(--font-mono); font-size:.82rem; cursor:pointer; font-weight:600; }
+  .preset-btn:hover{ background:var(--accent); color:#0e1216; }
+
+  table.heat-table{ width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  table.heat-table th{ background:var(--panel-2); color:var(--text-dim); font-size:.68rem; text-transform:uppercase;
+    letter-spacing:.05em; padding:10px 8px; text-align:center; font-weight:600; }
+  table.heat-table td{ padding:6px 8px; border-top:1px solid var(--line); text-align:center; }
+  table.heat-table input{
+    width:100%; background:var(--panel-2); color:var(--text); border:1px solid var(--line);
+    border-radius:4px; padding:6px 4px; font-family:var(--font-mono); font-size:.82rem; text-align:center;
+  }
+  table.heat-table input.temp{ font-weight:700; }
+  table.heat-table td.actions-cell{ white-space:nowrap; }
+  .icon-btn{ background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:1rem; padding:4px 6px; }
+  .icon-btn.save-row:hover{ color:var(--safe); }
+  .icon-btn.delete-row:hover{ color:var(--danger); }
+  .row-status{ font-size:.65rem; color:var(--text-dim); }
+
+  button.add-row{ width:100%; padding:12px; margin-top:10px; border:1px dashed var(--line); border-radius:6px;
+    background:none; color:var(--text-dim); font-family:var(--font-mono); font-size:.8rem; cursor:pointer; }
+  button.add-row:hover{ border-color:var(--accent); color:var(--accent); }
+
+  .level-card{ background:var(--panel); border:1px solid var(--line); border-left:5px solid var(--accent);
+    border-radius:8px; padding:16px 18px; margin-bottom:12px; }
+  .level-card .badge{ font-family:var(--font-display); font-weight:700; color:var(--accent); display:block; margin-bottom:12px; }
+  .level-card input[type=text], .level-card textarea{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--line); border-radius:4px;
+    padding:8px 10px; font-family:var(--font-mono); font-size:.85rem; width:100%;
+  }
+  .level-card textarea{ resize:vertical; min-height:40px; }
+  label{ font-size:.68rem; letter-spacing:.06em; text-transform:uppercase; color:var(--text-dim); display:block; margin-bottom:4px; }
+  .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
+  .row-bottom{ display:flex; align-items:center; justify-content:space-between; margin-top:6px; }
+  .notify-toggle{ display:flex; align-items:center; gap:8px; font-size:.82rem; color:var(--text-dim); }
+  .notify-toggle input{ width:16px; height:16px; }
+  button.save{ font-family:var(--font-mono); font-size:.8rem; border-radius:4px; padding:7px 14px; cursor:pointer;
+    border:1px solid var(--accent); background:var(--panel-2); color:var(--accent); }
+  .status{ font-size:.72rem; color:var(--text-dim); margin-left:10px; }
+
+  footer{ text-align:center; color:var(--text-dim); font-size:.7rem; padding:20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Επίπεδα &amp; Όρια</h1>
+  <a href="/">← Πίνακας ελέγχου</a>
+</header>
+
+<div class="layout">
+  <p class="hint">
+    Ο πίνακας λειτουργεί ακριβώς όπως το φύλλο αναφοράς σας: μία γραμμή ανά θερμοκρασία (°C), και μέχρι ποιο
+    ποσοστό υγρασίας ισχύει κάθε επίπεδο. Ό,τι υγρασία είναι πάνω από τη στήλη «Επίπεδο 4» γίνεται αυτόματα
+    <strong>Επίπεδο 5</strong>. Θερμοκρασίες κάτω από τη μικρότερη γραμμή θεωρούνται ασφαλείς (Επίπεδο 1), και
+    πάνω από τη μεγαλύτερη γραμμή θεωρούνται αυτόματα επικίνδυνες (Επίπεδο 5).
+  </p>
+
+  <div class="preset-bar">
+    <button class="preset-btn" id="loadModerateBtn">📋 Φόρτωση πίνακα «Μέτρια εργασία» (32-45°C)</button>
+  </div>
+  <p class="hint" style="margin-top:-8px;">⚠ Αντικαθιστά όλες τις γραμμές παρακάτω — μετά μπορείς να προσαρμόσεις οποιαδήποτε.</p>
+
+  <table class="heat-table">
+    <thead>
+      <tr>
+        <th>Θερμοκρασία °C</th>
+        <th>Επίπεδο 1<br>μέχρι % υγρασία</th>
+        <th>Επίπεδο 2<br>μέχρι % υγρασία</th>
+        <th>Επίπεδο 3<br>μέχρι % υγρασία</th>
+        <th>Επίπεδο 4<br>μέχρι % υγρασία</th>
+        <th>Επίπεδο 5</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="heatTableBody"></tbody>
+  </table>
+  <button class="add-row" id="addRowBtn">+ Προσθήκη γραμμής θερμοκρασίας</button>
+
+  <h2 class="section">Ρυθμίσεις ανά επίπεδο</h2>
+  <p class="hint">Ορίζεις εδώ μία φορά το πρόγραμμα διαλείμματος, το μήνυμα SMS, και αν στέλνεται ειδοποίηση — για κάθε επίπεδο 1-5.</p>
+  <div id="levelsContainer"></div>
+</div>
+
+<footer>Οι αλλαγές αποθηκεύονται στο <code>/api/heat-table/</code> και <code>/api/risk-levels/</code> και ισχύουν αμέσως.</footer>
+
+<script>
+function getCookie(name) {
+  const match = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+  return match ? match.pop() : '';
+}
+const csrftoken = getCookie('csrftoken');
+const jsonHeaders = { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken };
+
+/* ---------------- Heat index table ---------------- */
+const tbody = document.getElementById('heatTableBody');
+
+function rowTemplate(row) {
+  const id = row.id ?? '';
+  const v = (x) => (x === null || x === undefined ? '' : x);
+  return `
+    <tr data-id="${id}" data-saved="${row.id ? '1' : '0'}">
+      <td><input type="number" class="temp" step="1" value="${v(row.temperature)}"></td>
+      <td><input type="number" step="0.1" class="l1" value="${v(row.max_humidity_level1)}"></td>
+      <td><input type="number" step="0.1" class="l2" value="${v(row.max_humidity_level2)}"></td>
+      <td><input type="number" step="0.1" class="l3" value="${v(row.max_humidity_level3)}"></td>
+      <td><input type="number" step="0.1" class="l4" value="${v(row.max_humidity_level4)}"></td>
+      <td style="color:var(--text-dim); font-size:.75rem;">&gt; Επίπεδο 4</td>
+      <td class="actions-cell">
+        <button class="icon-btn save-row" title="Αποθήκευση">💾</button>
+        <button class="icon-btn delete-row" title="Διαγραφή">🗑</button>
+        <div class="row-status"></div>
+      </td>
+    </tr>
+  `;
+}
+
+function attachRowHandlers(tr) {
+  tr.querySelector('.save-row').addEventListener('click', () => saveRow(tr));
+  tr.querySelector('.delete-row').addEventListener('click', () => deleteRow(tr));
+}
+
+async function saveRow(tr) {
+  const statusEl = tr.querySelector('.row-status');
+  const payload = {
+    temperature: parseInt(tr.querySelector('.temp').value, 10),
+    max_humidity_level1: parseFloat(tr.querySelector('.l1').value),
+    max_humidity_level2: parseFloat(tr.querySelector('.l2').value),
+    max_humidity_level3: parseFloat(tr.querySelector('.l3').value),
+    max_humidity_level4: parseFloat(tr.querySelector('.l4').value),
+  };
+  const saved = tr.dataset.saved === '1';
+  try {
+    const res = await fetch(saved ? `/api/heat-table/${tr.dataset.id}/` : '/api/heat-table/', {
+      method: saved ? 'PATCH' : 'POST', headers: jsonHeaders, body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    tr.dataset.id = data.id;
+    tr.dataset.saved = '1';
+    statusEl.textContent = 'Αποθηκεύτηκε ✓';
+    setTimeout(() => (statusEl.textContent = ''), 1800);
+  } catch (e) {
+    statusEl.textContent = 'Σφάλμα';
+  }
+}
+
+async function deleteRow(tr) {
+  const saved = tr.dataset.saved === '1';
+  if (saved) {
+    if (!confirm('Διαγραφή αυτής της γραμμής θερμοκρασίας;')) return;
+    try { await fetch(`/api/heat-table/${tr.dataset.id}/`, { method: 'DELETE', headers: jsonHeaders }); }
+    catch (e) { /* remove from view anyway */ }
+  }
+  tr.remove();
+}
+
+async function loadHeatTable() {
+  const res = await fetch('/api/heat-table/');
+  const rows = await res.json();
+  tbody.innerHTML = '';
+  rows.sort((a, b) => a.temperature - b.temperature).forEach(row => {
+    tbody.insertAdjacentHTML('beforeend', rowTemplate(row));
+  });
+  tbody.querySelectorAll('tr').forEach(attachRowHandlers);
+}
+
+document.getElementById('addRowBtn').addEventListener('click', () => {
+  tbody.insertAdjacentHTML('beforeend', rowTemplate({}));
+  const newRow = tbody.lastElementChild;
+  attachRowHandlers(newRow);
+  newRow.querySelector('.temp').focus();
+  newRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
+document.getElementById('loadModerateBtn').addEventListener('click', async () => {
+  if (!confirm('Αυτό θα αντικαταστήσει όλο τον πίνακα με τα δεδομένα "Μέτρια εργασία". Συνέχεια;')) return;
+  await fetch('/api/heat-table/load-moderate/', { method: 'POST', headers: jsonHeaders });
+  loadHeatTable();
+});
+
+loadHeatTable();
+
+/* ---------------- Risk level settings (5 fixed levels, no name/severity) ---------------- */
+const levelsContainer = document.getElementById('levelsContainer');
+
+function levelTemplate(level) {
+  return `
+    <div class="level-card" data-id="${level.id}">
+      <span class="badge">Επίπεδο ${level.level_number}</span>
+      <div class="grid-2">
+        <div>
+          <label>Πρόγραμμα διαλείμματος</label>
+          <input type="text" class="f-schedule" value="${level.work_break_schedule ?? ''}" placeholder="π.χ. 15 λεπτά διάλειμμα ανά ώρα">
+        </div>
+        <div>
+          <label>Μήνυμα SMS</label>
+          <textarea class="f-message" placeholder="Κείμενο που θα σταλεί στο SMS">${level.message ?? ''}</textarea>
+        </div>
+      </div>
+      <div class="row-bottom">
+        <label class="notify-toggle">
+          <input type="checkbox" class="f-notify" ${level.notify ? 'checked' : ''}>
+          Αποστολή SMS όταν ενεργοποιείται αυτό το επίπεδο
+        </label>
+        <div>
+          <button class="save">Αποθήκευση</button>
+          <span class="status"></span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function loadLevels() {
+  const res = await fetch('/api/risk-levels/');
+  const levels = await res.json();
+  levelsContainer.innerHTML = '';
+  levels.sort((a, b) => a.level_number - b.level_number).forEach(level => {
+    levelsContainer.insertAdjacentHTML('beforeend', levelTemplate(level));
+  });
+  levelsContainer.querySelectorAll('.level-card').forEach(card => {
+    card.querySelector('.save').addEventListener('click', () => saveLevel(card));
+  });
+}
+
+async function saveLevel(card) {
+  const statusEl = card.querySelector('.status');
+  const payload = {
+    work_break_schedule: card.querySelector('.f-schedule').value,
+    message: card.querySelector('.f-message').value,
+    notify: card.querySelector('.f-notify').checked,
+  };
+  try {
+    const res = await fetch(`/api/risk-levels/${card.dataset.id}/`, {
+      method: 'PATCH', headers: jsonHeaders, body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    statusEl.textContent = 'Αποθηκεύτηκε ✓';
+    setTimeout(() => (statusEl.textContent = ''), 1800);
+  } catch (e) {
+    statusEl.textContent = 'Σφάλμα αποθήκευσης';
+  }
+}
+
+loadLevels();
+</script>
+</body>
+</html>
