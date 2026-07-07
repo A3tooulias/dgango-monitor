@@ -1,0 +1,79 @@
+/* Θέμα Climate Monitor για το Django admin.
+   Αλλάζει ΜΟΝΟ χρώματα/γραμματοσειρές, μέσω των CSS variables που ήδη ορίζει
+   το ίδιο το Django admin (:root και [data-theme="dark"]) - καμία παρέμβαση σε
+   πλάτη/διατάξεις, άρα το φυσικό responsive design του admin παραμένει ανέπαφο.
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root,
+html[data-theme="light"],
+html[data-theme="dark"] {
+  --primary: #4a90c4;
+  --secondary: #262d35;
+  --accent: #e0813f;
+
+  --primary-fg: #0e1216;
+
+  --body-fg: #e9e7df;
+  --body-bg: #171b20;
+  --body-quiet-color: #8b93a0;
+  --body-loud-color: #f4f3ef;
+
+  --header-color: #e9e7df;
+  --header-branding-color: #e0813f;
+  --header-bg: #1a1f25;
+  --header-link-color: #e9e7df;
+
+  --breadcrumbs-fg: #8b93a0;
+  --breadcrumbs-link-fg: #171b20;
+  --breadcrumbs-bg: #4a90c4;
+
+  --link-fg: #6ba8d1;
+  --link-hover-color: #8fc0e0;
+  --link-selected-fg: #6ba8d1;
+
+  --hairline-color: #333c46;
+  --border-color: #333c46;
+
+  --error-fg: #e2685e;
+
+  --message-success-bg: rgba(73,181,124,.18);
+  --message-warning-bg: rgba(224,129,63,.18);
+  --message-error-bg: rgba(214,72,63,.18);
+
+  --darkened-bg: #1c2129;
+  --selected-bg: #262d35;
+  --selected-row: #262d3580;
+
+  --button-fg: #0e1216;
+  --button-bg: #4a90c4;
+  --button-hover-bg: #6ba8d1;
+  --default-button-bg: #333c46;
+  --default-button-hover-bg: #3d4753;
+  --close-button-bg: #333c46;
+  --close-button-hover-bg: #3d4753;
+  --delete-button-bg: #d6483f;
+  --delete-button-hover-bg: #b93c33;
+
+  --object-tools-bg: #333c46;
+  --object-tools-hover-bg: #3d4753;
+
+  --font-family-primary: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-monospace: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+body, input, textarea, select, .button, button {
+  font-family: var(--font-family-monospace) !important;
+}
+
+#header, #branding h1, .module h2, .module caption, fieldset h2 {
+  font-family: var(--font-family-primary) !important;
+  letter-spacing: .02em;
+}
+
+/* Απαλή διαφάνεια στα panels/modules ώστε να μοιάζουν λίγο με τις κάρτες του dashboard */
+.module, .dashboard .module table {
+  border-radius: 8px;
+  overflow: hidden;
+}

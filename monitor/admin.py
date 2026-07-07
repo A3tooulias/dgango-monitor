@@ -22,9 +22,6 @@ admin.site.index_title = "Συσκευές & Παραλήπτες SMS"
 
 @admin.register(Device)
 class DeviceAdmin(admin.ModelAdmin):
-    class Media:
-        css = {"all": ("monitor/admin_extra.css",)}
-
     list_display = ["name", "location", "is_active", "is_online", "last_seen", "last_temperature", "last_humidity", "last_signal_level", "csv_upload_link"]
     list_filter = ["is_active"]
     search_fields = ["name", "location", "ecowitt_passkey"]
@@ -141,9 +138,6 @@ class DeviceAdmin(admin.ModelAdmin):
 
 @admin.register(Recipient)
 class RecipientAdmin(admin.ModelAdmin):
-    class Media:
-        css = {"all": ("monitor/admin_extra.css",)}
-
     list_display = ["name", "phone_number", "device_list", "receive_sms", "is_active", "test_sms_link"]
     list_filter = ["is_active", "receive_sms"]
     search_fields = ["name", "phone_number"]

@@ -1,0 +1,7 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'monitor/admin_theme.css' %}">
+{% endblock %}
