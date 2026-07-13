@@ -77,3 +77,84 @@ body, input, textarea, select, .button, button {
   border-radius: 8px;
   overflow: hidden;
 }
+
+/* ---------------- Σελίδα σύνδεσης (login) ---------------- */
+body.login {
+  background: var(--body-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+body.login #container {
+  max-width: 380px;
+  width: 100%;
+  background: #20262d;
+  border: 1px solid var(--hairline-color);
+  border-radius: 12px;
+  padding: 8px 0 24px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.35);
+}
+
+body.login #header {
+  background: transparent;
+  justify-content: center;
+  padding: 28px 20px 4px;
+}
+
+body.login #branding h1 {
+  font-size: 1.3rem;
+  color: var(--accent);
+  text-align: center;
+}
+
+body.login .content {
+  padding: 0 32px;
+}
+
+body.login .form-row {
+  padding: 10px 0;
+  border: none;
+}
+
+body.login .form-row label {
+  color: var(--body-quiet-color);
+  font-size: .75rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  display: block;
+  margin-bottom: 6px;
+}
+
+body.login input[type="text"],
+body.login input[type="password"] {
+  width: 100%;
+  background: #171b20;
+  border: 1px solid var(--hairline-color);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--body-fg);
+  box-sizing: border-box;
+}
+
+body.login .submit-row {
+  padding: 16px 0 0;
+  border: none;
+  text-align: center;
+}
+
+body.login .submit-row input {
+  width: 100%;
+  border-radius: 6px;
+  padding: 10px 0;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+body.login .errornote {
+  border-radius: 6px;
+  border-color: var(--error-fg);
+  color: var(--error-fg);
+  background: var(--message-error-bg);
+}

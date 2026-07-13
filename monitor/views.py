@@ -1,9 +1,11 @@
 import datetime
 import logging
 
+from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from rest_framework import generics
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -168,18 +170,21 @@ def dashboard(request):
     return render(request, "monitor/dashboard.html")
 
 
+@login_required
 def thresholds_page(request):
     return render(request, "monitor/thresholds.html")
 
 
 class RiskLevelListView(generics.ListAPIView):
     """GET /api/risk-levels/ -> οι 5 σταθερές βαθμίδες (πρόγραμμα/μήνυμα/notify)."""
+    permission_classes = [IsAuthenticated]
     queryset = RiskLevel.objects.order_by("level_number")
     serializer_class = RiskLevelSerializer
 
 
 class RiskLevelDetailView(generics.RetrieveUpdateAPIView):
     """PATCH /api/risk-levels/<id>/ -> άλλαξε πρόγραμμα διαλείμματος / μήνυμα / notify."""
+    permission_classes = [IsAuthenticated]
     queryset = RiskLevel.objects.all()
     serializer_class = RiskLevelSerializer
 
@@ -189,12 +194,14 @@ class HeatIndexRowListCreateView(generics.ListCreateAPIView):
     GET  /api/heat-table/  -> όλες οι γραμμές του πίνακα (μία ανά θερμοκρασία)
     POST /api/heat-table/  -> πρόσθεσε νέα γραμμή θερμοκρασίας
     """
+    permission_classes = [IsAuthenticated]
     queryset = HeatIndexRow.objects.order_by("temperature")
     serializer_class = HeatIndexRowSerializer
 
 
 class HeatIndexRowDetailView(generics.RetrieveUpdateDestroyAPIView):
     """PATCH/DELETE /api/heat-table/<id>/ -> επεξεργασία ή διαγραφή μιας γραμμής."""
+    permission_classes = [IsAuthenticated]
     queryset = HeatIndexRow.objects.all()
     serializer_class = HeatIndexRowSerializer
 
@@ -205,6 +212,7 @@ class LoadModerateTableView(APIView):
     Αντικαθιστά ΟΛΟΚΛΗΡΟ τον πίνακα θερμοκρασίας/υγρασίας με τον πίνακα
     "Μέτρια εργασία". Ο χρήστης μπορεί μετά να προσαρμόσει οποιαδήποτε γραμμή.
     """
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         HeatIndexRow.objects.all().delete()

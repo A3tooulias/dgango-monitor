@@ -33,6 +33,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -79,6 +80,11 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+# Το /thresholds/ (και τα APIs που αλλάζουν όρια) χρειάζονται login - στέλνει
+# εδώ όποιον δεν έχει συνδεθεί ακόμα. Χρησιμοποιούμε την ήδη υπάρχουσα σελίδα
+# σύνδεσης του admin, δεν χρειάζεται ξεχωριστή δική μας.
+LOGIN_URL = "/admin/login/"
+
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = os.environ.get("DJANGO_TIME_ZONE", "UTC")
 USE_I18N = True
@@ -87,6 +93,14 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "monitor" / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Το whitenoise σερβίρει τα static αρχεία (CSS/JS) απευθείας από το Django,
+# χωρίς να χρειάζεται nginx - απαραίτητο γιατί το waitress (σε αντίθεση με
+# το runserver) δεν τα σερβίρει μόνο του.
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -102,10 +116,6 @@ REST_FRAMEWORK = {
     ],
 }
 
-# --------------------------------------------------------------------------
-# Notifications (SMS μέσω InfiniReach - infinireach.io, χρησιμοποιεί το δικό
-# σου Android κινητό/SIM ως πύλη SMS, δωρεάν πλάνο διαθέσιμο)
-# --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
 # Notifications (SMS μέσω SMSGate - sms-gate.app, χρησιμοποιεί το δικό σου
 # Android κινητό/SIM, ουσιαστικά χωρίς όριο μηνυμάτων)
