@@ -3,7 +3,7 @@
   1. evaluate_reading()  -> βρίσκει σε ποιο Επίπεδο (1-5) ανήκει μια μέτρηση,
                              κοιτώντας τον πίνακα θερμοκρασίας/υγρασίας (HeatIndexRow).
   2. maybe_notify()      -> αποφασίζει αν πρέπει να σταλεί SMS τώρα, και το στέλνει.
-  3. send_sms()          -> wrapper γύρω από το InfiniReach API (infinireach.io).
+  3. send_sms()          -> wrapper γύρω από το SMSGate API (sms-gate.app).
 """
 import logging
 
@@ -78,26 +78,37 @@ def record_reading(device, temperature, humidity, timestamp=None):
 
 def maybe_notify(device, risk_level, reading):
     """
-    Στέλνει SMS μόνο όταν:
-      - το επίπεδο μόλις άλλαξε, ή
-      - πέρασαν NOTIFICATION_COOLDOWN_MINUTES από την τελευταία ειδοποίηση
-        ίδιου επιπέδου (ώστε να μη σε πλημμυρίζει με μηνύματα).
+    Στέλνει SMS με δύο κανόνες ασφαλείας μαζί:
+      1. ΠΟΤΕ δεν καθυστερεί μια ΧΕΙΡΟΤΕΡΕΥΣΗ - αν το νέο επίπεδο είναι πιο
+         επικίνδυνο από ό,τι ήταν πριν, στέλνεται αμέσως, χωρίς εξαίρεση.
+      2. Πέρα από αυτό, δεν στέλνεται ΚΑΝΕΝΑ νέο SMS για αυτή τη συσκευή αν
+         πέρασε λιγότερο από NOTIFICATION_COOLDOWN_MINUTES από το προηγούμενο -
+         ό,τι επίπεδο κι αν ήταν εκείνο. Αυτό εμποδίζει το σενάριο όπου μια
+         μέτρηση ταλαντεύεται γρήγορα ανάμεσα σε δύο επίπεδα (π.χ. ακριβώς στο
+         όριο) και θα έστελνε SMS σε κάθε ταλάντωση.
     """
     if risk_level is None or not risk_level.notify:
         return
 
     label = f"Επίπεδο {risk_level.level_number}"
     cooldown = timezone.timedelta(minutes=settings.NOTIFICATION_COOLDOWN_MINUTES)
-    last_alert = (
-        NotificationLog.objects.filter(device=device, signal_level=label)
-        .order_by("-created_at")
-        .first()
-    )
-    level_changed = device.last_signal_level != label
-    cooldown_expired = last_alert is None or (timezone.now() - last_alert.created_at) >= cooldown
 
-    if not (level_changed or cooldown_expired):
-        return
+    is_escalation = (device.last_severity or 0) < risk_level.level_number
+
+    last_notification = (
+        NotificationLog.objects.filter(device=device).order_by("-created_at").first()
+    )
+    global_cooldown_active = (
+        last_notification is not None
+        and (timezone.now() - last_notification.created_at) < cooldown
+    )
+
+    level_changed = device.last_signal_level != label
+    if not is_escalation:
+        if global_cooldown_active:
+            return  # πολύ πρόσφατη ειδοποίηση, και δεν χειροτέρεψε -> μην ξαναστείλεις
+        if not level_changed:
+            return  # ίδιο επίπεδο, δεν πέρασε ακόμα ο χρόνος για reminder
 
     text = (
         f"[{label}] {device.name}"
@@ -129,33 +140,27 @@ def _log_and_send(device, label, text, recipient):
 
 
 # --------------------------------------------------------------------------
-# SMS (μέσω InfiniReach - infinireach.io, χρησιμοποιεί Android κινητό/SIM)
+# SMS (μέσω SMSGate - sms-gate.app, χρησιμοποιεί Android κινητό/SIM)
 # --------------------------------------------------------------------------
 def send_sms(phone_number, text):
     """
-    Στέλνει SMS μέσω InfiniReach (infinireach.io) - χρησιμοποιεί το δικό σου
-    Android κινητό/SIM σαν πύλη SMS. Χρειάζεται τα INFINIREACH_API_KEY και
-    INFINIREACH_FROM_NUMBER στο .env (το δεύτερο είναι ο αριθμός της SIM που
-    έχεις καταχωρήσει στο InfiniReach dashboard, στα "Devices & SIMs").
+    Στέλνει SMS μέσω SMSGate (sms-gate.app) - ανοιχτού κώδικα, χρησιμοποιεί το
+    δικό σου Android κινητό/SIM σαν πύλη SMS, ουσιαστικά χωρίς όριο μηνυμάτων
+    (μόνο ό,τι επιτρέπει το δικό σου πακέτο SMS). Χρειάζεται τα SMS_GATEWAY_URL,
+    SMS_GATEWAY_USERNAME, SMS_GATEWAY_PASSWORD στο .env (τα δίνει η ίδια η
+    εφαρμογή SMSGate στο κινητό σου, στην ενότητα "Cloud Server").
     """
-    if not (settings.INFINIREACH_API_KEY and settings.INFINIREACH_FROM_NUMBER):
+    if not (settings.SMS_GATEWAY_URL and settings.SMS_GATEWAY_USERNAME and settings.SMS_GATEWAY_PASSWORD):
         raise RuntimeError(
-            "Τα στοιχεία InfiniReach δεν έχουν ρυθμιστεί (δες .env: INFINIREACH_API_KEY, INFINIREACH_FROM_NUMBER)"
+            "Τα στοιχεία SMSGate δεν έχουν ρυθμιστεί (δες .env: SMS_GATEWAY_URL, SMS_GATEWAY_USERNAME, SMS_GATEWAY_PASSWORD)"
         )
 
+    url = settings.SMS_GATEWAY_URL.rstrip("/") + "/3rdparty/v1/messages"
     response = requests.post(
-        "https://api.infinireach.io/api/v1/messages",
-        headers={"X-API-Key": settings.INFINIREACH_API_KEY, "Content-Type": "application/json"},
-        json={
-            "to": phone_number,
-            "message": text,
-            "from": settings.INFINIREACH_FROM_NUMBER,
-            "channel": "sms",
-        },
+        url,
+        auth=(settings.SMS_GATEWAY_USERNAME, settings.SMS_GATEWAY_PASSWORD),
+        json={"textMessage": {"text": text}, "phoneNumbers": [phone_number]},
         timeout=15,
     )
     response.raise_for_status()
-    data = response.json()
-    if not data.get("success"):
-        raise RuntimeError(f"Το InfiniReach απάντησε χωρίς επιτυχία: {data}")
-    return data
+    return response.json()

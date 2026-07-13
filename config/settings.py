@@ -106,8 +106,13 @@ REST_FRAMEWORK = {
 # Notifications (SMS μέσω InfiniReach - infinireach.io, χρησιμοποιεί το δικό
 # σου Android κινητό/SIM ως πύλη SMS, δωρεάν πλάνο διαθέσιμο)
 # --------------------------------------------------------------------------
-INFINIREACH_API_KEY = os.environ.get("INFINIREACH_API_KEY", "")
-INFINIREACH_FROM_NUMBER = os.environ.get("INFINIREACH_FROM_NUMBER", "")  # ο αριθμός SIM του κινητού σου, π.χ. +35799xxxxxx
+# --------------------------------------------------------------------------
+# Notifications (SMS μέσω SMSGate - sms-gate.app, χρησιμοποιεί το δικό σου
+# Android κινητό/SIM, ουσιαστικά χωρίς όριο μηνυμάτων)
+# --------------------------------------------------------------------------
+SMS_GATEWAY_URL = os.environ.get("SMS_GATEWAY_URL", "")  # π.χ. https://api.sms-gate.app ή http://192.168.1.50:8080 (local mode)
+SMS_GATEWAY_USERNAME = os.environ.get("SMS_GATEWAY_USERNAME", "")
+SMS_GATEWAY_PASSWORD = os.environ.get("SMS_GATEWAY_PASSWORD", "")
 
 # Minimum minutes between two notifications of the SAME signal level for the
 # SAME device, so you don't get spammed every time a reading comes in.
