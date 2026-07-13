@@ -93,6 +93,12 @@
   .panel-header-row{
     display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; flex-wrap:wrap;
   }
+  .header-actions{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .export-btn{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--line);
+    border-radius:4px; padding:6px 12px; font-family:var(--font-mono); font-size:.78rem; cursor:pointer;
+  }
+  .export-btn:hover{ border-color:var(--safe); color:var(--safe); }
   .chart-wrap{ position:relative; height:340px; }
   canvas{ width:100% !important; }
 
@@ -119,6 +125,7 @@
       <option value="5">5 λεπτά</option>
       <option value="10">10 λεπτά</option>
     </select>
+    <button id="refreshNowBtn" title="Έλεγξε για νέα δεδομένα τώρα, χωρίς αναμονή" style="background:var(--panel-2); color:var(--text); border:1px solid var(--line); border-radius:4px; padding:6px 12px; font-family:var(--font-mono); font-size:.78rem; cursor:pointer;">🔄 Ανανέωση τώρα</button>
   </div>
 </header>
 
@@ -151,12 +158,15 @@
   <div class="panel">
     <div class="panel-header-row">
       <h2 id="chartTitle">Τελευταίες 2 ώρες</h2>
-      <select id="rangeSelect">
-        <option value="120">Τελευταίες 2 ώρες</option>
-        <option value="360">Τελευταίες 6 ώρες</option>
-        <option value="1440">Τελευταίες 24 ώρες</option>
-        <option value="10080">Τελευταίες 7 μέρες</option>
-      </select>
+      <div class="header-actions">
+        <button id="exportCsvBtn" class="export-btn" title="Κατέβασε τα δεδομένα του τρέχοντος εύρους σε CSV">⬇ Export CSV</button>
+        <select id="rangeSelect">
+          <option value="120">Τελευταίες 2 ώρες</option>
+          <option value="360">Τελευταίες 6 ώρες</option>
+          <option value="1440">Τελευταίες 24 ώρες</option>
+          <option value="10080">Τελευταίες 7 μέρες</option>
+        </select>
+      </div>
     </div>
     <div class="chart-wrap"><canvas id="chart"></canvas></div>
     <div class="meta-row">
@@ -259,6 +269,16 @@ function restartPolling() {
 }
 intervalSelect.addEventListener('change', restartPolling);
 
+document.getElementById('refreshNowBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('refreshNowBtn');
+  const original = btn.textContent;
+  btn.textContent = '🔄 Ανανέωση…';
+  btn.disabled = true;
+  await Promise.all([fetchAndRender(), renderDeviceTabs()]);
+  btn.textContent = original;
+  btn.disabled = false;
+});
+
 function initChart() {
   const ctx = document.getElementById('chart').getContext('2d');
 
@@ -329,6 +349,9 @@ const rangeSelect = document.getElementById('rangeSelect');
 const chartTitle = document.getElementById('chartTitle');
 rangeSelect.addEventListener('change', fetchAndRender);
 
+let lastReadings = [];
+let lastDeviceName = '';
+
 async function fetchAndRender() {
   if (!currentDeviceId) return;
   const minutes = parseInt(rangeSelect.value, 10);
@@ -337,6 +360,8 @@ async function fetchAndRender() {
     const res = await fetch(`/api/devices/${currentDeviceId}/readings/?minutes=${minutes}`);
     const data = await res.json();
     const readings = data.readings || [];
+    lastReadings = readings;
+    lastDeviceName = data.device?.name || 'device';
 
     // Για μεγάλα εύρη (24 ώρες+) δείχνουμε ημερομηνία+ώρα στις ετικέτες,
     // αλλιώς μόνο ώρα - πιο ευανάγνωστο ανάλογα το εύρος.
@@ -374,6 +399,55 @@ async function fetchAndRender() {
     document.getElementById('lastUpdated').textContent = 'Δεν ήταν δυνατή η σύνδεση με τον server.';
   }
 }
+
+/* ---------------- Export CSV ---------------- */
+function csvEscape(value) {
+  const str = String(value ?? '');
+  return /[",\n]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str;
+}
+
+function formatCsvTimestamp(isoString) {
+  const d = new Date(isoString);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} `
+       + `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function readingsToCsv(readings) {
+  // Το "severity" το αφαιρέσαμε επίτηδες - είναι απλά ο αριθμός μέσα στο
+  // ίδιο το "signal_level" (π.χ. "Επίπεδο 2" -> 2), περιττή επανάληψη.
+  const header = ['timestamp', 'temperature_c', 'humidity_percent', 'signal_level'];
+  const rows = readings.map(r => [
+    formatCsvTimestamp(r.created_at), r.temperature, r.humidity, r.signal_level,
+  ].map(csvEscape).join(','));
+  return [header.join(','), ...rows].join('\n');
+}
+
+function safeFilenamePart(str) {
+  return String(str).trim().replace(/\s+/g, '_').replace(/[\\/:*?"<>|]/g, '');
+}
+
+document.getElementById('exportCsvBtn').addEventListener('click', () => {
+  if (!lastReadings.length) {
+    alert('Δεν υπάρχουν δεδομένα στο τρέχον εύρος για εξαγωγή.');
+    return;
+  }
+  const csv = readingsToCsv(lastReadings);
+  const rangeLabel = safeFilenamePart(rangeSelect.options[rangeSelect.selectedIndex].text);
+  const deviceLabel = safeFilenamePart(lastDeviceName || 'device');
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  const filename = `${deviceLabel}_${rangeLabel}_${stamp}.csv`;
+
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
 
 renderDeviceTabs();
 restartPolling();
