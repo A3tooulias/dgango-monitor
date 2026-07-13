@@ -20,6 +20,16 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-secret-key-change-me")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",")
 
+# Το Django ελέγχει το "Origin" των POST αιτημάτων (π.χ. login, αποθήκευση
+# ορίων) ξεχωριστά από το ALLOWED_HOSTS - χωρίς αυτό, κάθε φόρμα POST μέσω
+# ενός Cloudflare Quick Tunnel αποτυγχάνει με "CSRF verification failed".
+# Το wildcard "*.trycloudflare.com" καλύπτει ΚΑΘΕ τυχαία διεύθυνση quick
+# tunnel, χωρίς να χρειάζεται να το ξαναρυθμίζεις κάθε φορά που αλλάζει.
+# Όταν περάσεις σε μόνιμο domain, πρόσθεσε το κι αυτό εδώ (ή βάλε το στο .env).
+CSRF_TRUSTED_ORIGINS = os.environ.get(
+    "DJANGO_CSRF_TRUSTED_ORIGINS", "https://*.trycloudflare.com"
+).split(",")
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
