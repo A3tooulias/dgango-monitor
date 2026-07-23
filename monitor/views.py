@@ -10,11 +10,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .heat_table_preset import MODERATE_WORK_TABLE
-from .models import Device, HeatIndexRow, RiskLevel
+from .models import StationObservation,SystemSettings,Device, HeatIndexRow, RiskLevel
 from .serializers import (
     DeviceSerializer, HeatIndexRowSerializer, ReadingInSerializer,
-    ReadingOutSerializer, RiskLevelSerializer,
+    ReadingOutSerializer, RiskLevelSerializer,SystemSettingsSerializer,
 )
+
+from .agromet import AGROMET_STATIONS, search_addresses
 from .services import record_reading
 
 logger = logging.getLogger(__name__)
@@ -164,7 +166,12 @@ class DeviceReadingsView(APIView):
                 "readings": ReadingOutSerializer(readings, many=True).data,
             }
         )
+class GeocodeSearchView(APIView):
+    """GET /api/geocode-search/?q=... -> προτάσεις διευθύνσεων για autocomplete."""
 
+    def get(self, request):
+        query = request.query_params.get("q", "")
+        return Response(search_addresses(query))
 
 def dashboard(request):
     return render(request, "monitor/dashboard.html")
@@ -225,3 +232,42 @@ class LoadModerateTableView(APIView):
         ])
         rows = HeatIndexRow.objects.order_by("temperature")
         return Response(HeatIndexRowSerializer(rows, many=True).data)
+class SystemSettingsView(generics.RetrieveUpdateAPIView):
+    """GET/PATCH /api/settings/ -> π.χ. {"agromet_poll_minutes": 5}"""
+    serializer_class = SystemSettingsSerializer
+    def get_object(self):
+            return SystemSettings.load()
+class MapDataView(APIView):
+    """GET /api/map-data/ -> σταθμοί AgroMet + συσκευές, για τον χάρτη Κύπρου."""
+
+    def get(self, request):
+        observations = {
+            obs.station_code: {"temperature": obs.temperature, "humidity": obs.humidity, "date_time": obs.observed_at}
+            for obs in StationObservation.objects.all()
+        }
+        stations = []
+        for code, (lat, lon) in AGROMET_STATIONS.items():
+            data = observations.get(code, {})
+            stations.append({
+                "code": code,
+                "lat": lat,
+                "lon": lon,
+                "temperature": data.get("temperature"),
+                "humidity": data.get("humidity"),
+                "date_time": data.get("date_time"),
+            })
+
+        devices = []
+        for device in Device.objects.filter(
+            is_active=True, worksite_latitude__isnull=False, worksite_longitude__isnull=False,
+        ):
+            devices.append({
+                "name": device.name,
+                "lat": device.worksite_latitude,
+                "lon": device.worksite_longitude,
+                "signal_level": device.last_signal_level,
+                "severity": device.last_severity,
+                "station_code": device.agromet_station_code,
+            })
+
+        return Response({"stations": stations, "devices": devices})

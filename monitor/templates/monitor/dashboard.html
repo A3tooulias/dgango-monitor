@@ -8,6 +8,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
   onerror="this.onerror=null; var s=document.createElement('script'); s.src='https://unpkg.com/chart.js@4.4.4/dist/chart.umd.min.js'; s.onload=function(){ try { initChart(); if (typeof fetchAndRender === 'function') fetchAndRender(); document.querySelectorAll('.chart-fail-msg').forEach(el => el.remove()); } catch(e) {} }; document.head.appendChild(s);"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root{
     --bg: #171b20;
@@ -108,6 +110,12 @@
   .empty-state{ color:var(--text-dim); font-size:.85rem; line-height:1.6; }
   footer{ text-align:center; color:var(--text-dim); font-size:.7rem; padding:20px; }
   a { color: var(--text-dim); }
+  .map-custom-btn{
+  background:var(--panel-2); color:var(--text); border:none;
+  width:30px; height:30px; font-size:16px; cursor:pointer; display:block;
+  }
+  .map-custom-btn:hover{ background:var(--line); }
+  #cyprusMap:fullscreen{ width:100vw !important; height:100vh !important; }
 </style>
 </head>
 <body>
@@ -173,6 +181,23 @@
       <div class="status-line"><span class="dot" id="liveDot"></span><span id="lastUpdated">Αναμονή δεδομένων&hellip;</span></div>
       <div>Αυτόματη ανανέωση γραφήματος — API: <code>/api/devices/&lt;id&gt;/readings/</code></div>
     </div>
+    <div class="panel">
+    <div class="panel-header-row">
+      <h2>Χάρτης Σταθμών &amp; Συσκευών</h2>
+    </div>
+    <div id="cyprusMap" style="height:420px; border-radius:8px; overflow:hidden;"></div>
+    <div class="map-controls" style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;">
+      <select id="worksiteSelect">
+        <option value="">📍 Πήγαινε σε εργοτάξιο...</option>
+      </select>
+      <select id="stationSelect">
+        <option value="">🌡️ Πήγαινε σε σταθμό...</option>
+      </select>
+    </div>
+    <div class="meta-row">
+      <div>🔵 Μετεωρολογικοί σταθμοί (AgroMet) &nbsp; • &nbsp; ⬤ Οι συσκευές σου (χρώμα = επίπεδο κινδύνου)</div>
+    </div>
+  </div>
   </div>
 
 </div>
@@ -202,7 +227,123 @@ function selectDevice(id, tabEl) {
   fetchAndRender();
   restartPolling();
 }
+/* ---------------- Χάρτης Κύπρου ---------------- */
+/* ---------------- Χάρτης Κύπρου ---------------- */
+let cyprusMap = null;
+let stationMarkers = [];
+let deviceMarkers = [];
+let lastMapDevices = [];
+let lastMapStations = [];
 
+function initMap() {
+  const ResetViewControl = L.Control.extend({
+    options: { position: 'topleft' },
+    onAdd: function(map) {
+      const btn = L.DomUtil.create('button', 'leaflet-bar map-custom-btn');
+      btn.innerHTML = '⟲';
+      btn.title = 'Επαναφορά προβολής';
+      btn.onclick = (e) => { e.preventDefault(); map.setView([35.1, 33.3], 9); };
+      return btn;
+    }
+  });
+
+  const FullscreenControl = L.Control.extend({
+    options: { position: 'topleft' },
+    onAdd: function(map) {
+      const btn = L.DomUtil.create('button', 'leaflet-bar map-custom-btn');
+      btn.innerHTML = '⛶';
+      btn.title = 'Πλήρης οθόνη';
+      btn.onclick = (e) => {
+        e.preventDefault();
+        const container = map.getContainer();
+        if (!document.fullscreenElement) { container.requestFullscreen(); }
+        else { document.exitFullscreen(); }
+      };
+      return btn;
+    }
+  });
+
+  cyprusMap = L.map('cyprusMap', { zoomControl: true }).setView([35.1, 33.3], 9);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    subdomains: 'abcd',
+    maxZoom: 19,
+  }).addTo(cyprusMap);
+  new ResetViewControl().addTo(cyprusMap);
+  new FullscreenControl().addTo(cyprusMap);
+}
+
+document.addEventListener('fullscreenchange', () => {
+  if (cyprusMap) setTimeout(() => cyprusMap.invalidateSize(), 150);
+});
+
+async function refreshMap() {
+  if (!cyprusMap) return;
+  try {
+    const res = await fetch('/api/map-data/?t=' + Date.now());
+    const data = await res.json();
+    lastMapStations = data.stations || [];
+    lastMapDevices = data.devices || [];
+
+    stationMarkers.forEach(m => cyprusMap.removeLayer(m));
+    stationMarkers = lastMapStations.map(s => {
+      const popup = (s.temperature != null && s.humidity != null)
+        ? `<b>${s.code}</b><br>${s.temperature}°C / ${s.humidity}%<br><span style="color:#8b93a0;font-size:.75rem;">${s.date_time || ''}</span>`
+        : `<b>${s.code}</b><br><span style="color:#8b93a0;">Χωρίς πρόσφατα δεδομένα</span>`;
+      return L.circleMarker([s.lat, s.lon], { radius: 5, color: '#4a90c4', fillColor: '#4a90c4', fillOpacity: .7, weight: 1 })
+        .addTo(cyprusMap).bindPopup(popup);
+    });
+
+    deviceMarkers.forEach(m => cyprusMap.removeLayer(m));
+    deviceMarkers = lastMapDevices.map(d => {
+      const color = severityColor(d.severity, maxSeverity);
+      const popup = `<b>${d.name}</b><br>${d.signal_level || 'Χωρίς δεδομένα'}<br><span style="color:#8b93a0;font-size:.75rem;">Σταθμός: ${d.station_code || '—'}</span>`;
+      return L.circleMarker([d.lat, d.lon], { radius: 8, color, fillColor: color, fillOpacity: .9, weight: 2 })
+        .addTo(cyprusMap).bindPopup(popup);
+    });
+
+    populateMapSelectors();
+  } catch (e) {
+    console.error('Αποτυχία ανανέωσης χάρτη', e);
+  }
+}
+
+function populateMapSelectors() {
+  const worksiteSelect = document.getElementById('worksiteSelect');
+  worksiteSelect.innerHTML = '<option value="">📍 Πήγαινε σε εργοτάξιο...</option>' +
+    lastMapDevices.map((d, i) => `<option value="${i}">${d.name}</option>`).join('');
+
+  const stationSelect = document.getElementById('stationSelect');
+  stationSelect.innerHTML = '<option value="">🌡️ Πήγαινε σε σταθμό...</option>' +
+    lastMapStations.map((s, i) => `<option value="${i}">${s.code}</option>`).join('');
+}
+
+document.getElementById('worksiteSelect').addEventListener('change', (e) => {
+  const idx = e.target.value;
+  if (idx === '') return;
+  const d = lastMapDevices[idx];
+  if (!d) return;
+  cyprusMap.setView([d.lat, d.lon], 13);
+  deviceMarkers[idx]?.openPopup();
+});
+
+document.getElementById('stationSelect').addEventListener('change', (e) => {
+  const idx = e.target.value;
+  if (idx === '') return;
+  const s = lastMapStations[idx];
+  if (!s) return;
+  cyprusMap.setView([s.lat, s.lon], 13);
+  stationMarkers[idx]?.openPopup();
+});
+
+try {
+  initMap();
+  refreshMap();
+} catch (e) {
+  console.error('Ο χάρτης δεν φόρτωσε (πρόβλημα Leaflet CDN):', e);
+  document.getElementById('cyprusMap').innerHTML =
+    '<p style="color:var(--warning); padding:16px;">⚠ Ο χάρτης δεν φόρτωσε (πρόβλημα σύνδεσης).</p>';
+}
 // --- Η λίστα συσκευών φορτώνεται δυναμικά (JS), ΟΧΙ μία φορά από τον server ---
 // Έτσι, αν προσθέσεις νέα συσκευή (π.χ. μέσω simulate_device ή admin), θα
 // εμφανιστεί μόνη της στην επόμενη ανανέωση, χωρίς να χρειάζεται F5.
@@ -265,16 +406,22 @@ async function renderDeviceTabs() {
 function restartPolling() {
   if (pollTimer) clearInterval(pollTimer);
   const minutes = parseInt(intervalSelect.value, 10);
-  pollTimer = setInterval(() => { fetchAndRender(); renderDeviceTabs(); }, minutes * 60 * 1000);
+  pollTimer = setInterval(() => { fetchAndRender(); renderDeviceTabs(); refreshMap(); }, minutes * 60 * 1000);
 }
-intervalSelect.addEventListener('change', restartPolling);
-
+intervalSelect.addEventListener('change', () => {
+  restartPolling();
+  fetch('/api/settings/', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agromet_poll_minutes: parseInt(intervalSelect.value, 10) }),
+  });
+});
 document.getElementById('refreshNowBtn').addEventListener('click', async () => {
   const btn = document.getElementById('refreshNowBtn');
   const original = btn.textContent;
   btn.textContent = '🔄 Ανανέωση…';
   btn.disabled = true;
-  await Promise.all([fetchAndRender(), renderDeviceTabs()]);
+  await Promise.all([fetchAndRender(), renderDeviceTabs(),refreshMap()]);
   btn.textContent = original;
   btn.disabled = false;
 });

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Device, HeatIndexRow, Reading, RiskLevel
+from .models import Device, HeatIndexRow, Reading, RiskLevel,SystemSettings
 
 
 class ReadingInSerializer(serializers.Serializer):
@@ -58,3 +58,7 @@ class HeatIndexRowSerializer(serializers.ModelSerializer):
             "max_humidity_level1", "max_humidity_level2",
             "max_humidity_level3", "max_humidity_level4",
         ]
+class SystemSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SystemSettings
+        fields = ["agromet_poll_minutes"]

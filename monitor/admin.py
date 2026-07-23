@@ -7,6 +7,9 @@ from .csv_import import CsvImportError, import_rows_for_device, parse_csv
 from .models import Device, NotificationLog, Recipient
 from .services import send_sms
 
+from django.contrib import messages
+from .agromet import geocode_address, find_nearest_station, GeocodeError
+
 # --- Branding: αντί για το γενικό "Django administration" παντού ---
 admin.site.site_header = "Climate Monitor — Διαχείριση"
 admin.site.site_title = "Climate Monitor"
@@ -22,6 +25,33 @@ admin.site.index_title = "Συσκευές & Παραλήπτες SMS"
 
 @admin.register(Device)
 class DeviceAdmin(admin.ModelAdmin):
+    class Media:
+        js = ("monitor/device_admin.js",)
+
+    def save_model(self, request, obj, form, change):
+        # Επιβάλλουμε ΕΝΑ μόνο τρόπο λήψης δεδομένων ανά συσκευή - καθαρίζουμε
+        # τα πεδία του άλλου τρόπου, ώστε να μην μπερδεύονται ποτέ μετρήσεις.
+        if obj.data_source == "sensor":
+            obj.worksite_address = ""
+            obj.worksite_latitude = None
+            obj.worksite_longitude = None
+            obj.agromet_station_code = ""
+        elif obj.data_source == "agromet":
+            obj.ecowitt_passkey = ""
+            obj.ecowitt_channel = None
+            if obj.worksite_address:
+                try:
+                    lat, lon = geocode_address(obj.worksite_address)
+                    obj.worksite_latitude = lat
+                    obj.worksite_longitude = lon
+                    station_code, distance_km = find_nearest_station(lat, lon)
+                    obj.agromet_station_code = station_code
+                    self.message_user(request, f"Πλησιέστερος σταθμός: {station_code} ({distance_km:.1f} km μακριά).")
+                except GeocodeError as exc:
+                    self.message_user(request, str(exc), level=messages.WARNING)
+                except Exception as exc:  # noqa: BLE001
+                    self.message_user(request, f"Σφάλμα γεωκωδικοποίησης: {exc}", level=messages.ERROR)
+        super().save_model(request, obj, form, change)
     list_display = ["name", "location", "is_active", "is_online", "last_seen", "last_temperature", "last_humidity", "last_signal_level", "csv_upload_link"]
     list_filter = ["is_active"]
     search_fields = ["name", "location", "ecowitt_passkey"]
@@ -30,15 +60,33 @@ class DeviceAdmin(admin.ModelAdmin):
     readonly_fields = [
         "api_key", "usage_hint",
         "last_seen", "last_temperature", "last_humidity", "last_signal_level", "last_severity",
-        "recent_notifications",
+        "recent_notifications","worksite_latitude", "worksite_longitude", "agromet_station_code",
     ]
+    def save_model(self, request, obj, form, change):
+        if obj.worksite_address:
+            try:
+                lat, lon = geocode_address(obj.worksite_address)
+                obj.worksite_latitude = lat
+                obj.worksite_longitude = lon
+                station_code, distance_km = find_nearest_station(lat, lon)
+                obj.agromet_station_code = station_code
+                self.message_user(
+                    request,
+                    f"Πλησιέστερος σταθμός: {station_code} ({distance_km:.1f} km μακριά).",
+                )
+            except GeocodeError as exc:
+                self.message_user(request, str(exc), level=messages.WARNING)
+            except Exception as exc:  # noqa: BLE001
+                self.message_user(request, f"Σφάλμα γεωκωδικοποίησης: {exc}", level=messages.ERROR)
+        super().save_model(request, obj, form, change)
     fieldsets = (
         ("Στοιχεία συσκευής", {
-            "fields": ("name", "location", "is_active"),
+            "fields": ("name", "location", "is_active", "data_source"),
             "description": "Συμπλήρωσε μόνο το 'Name' (υποχρεωτικό). Η τοποθεσία και το 'Is active' είναι προαιρετικά.",
         }),
         ("Πώς να τη συνδέσεις (δικό μας JSON API)", {
             "fields": ("api_key", "usage_hint"),
+            "classes": ("sensor-fieldset",),
             "description": (
                 "Το api_key δημιουργείται αυτόματα μόλις αποθηκεύσεις τη συσκευή για πρώτη φορά. "
                 "Χρησιμοποίησέ το είτε για ζωντανά δεδομένα (API POST, π.χ. DIY ESP32), είτε ανέβασε CSV export παρακάτω."
@@ -46,6 +94,7 @@ class DeviceAdmin(admin.ModelAdmin):
         }),
         ("Ή σύνδεση μέσω Ecowitt Gateway", {
             "fields": ("ecowitt_passkey", "ecowitt_channel"),
+            "classes": ("sensor-fieldset",),
             "description": (
                 "Αν η συσκευή είναι Ecowitt (WN32/WH32/WH31 + Gateway GW1100/GW2000), συμπλήρωσε "
                 "εδώ ΑΝΤΙ για api_key. Ρύθμισε το Gateway σου (WS View Plus app -> Weather Services -> "
@@ -60,6 +109,11 @@ class DeviceAdmin(admin.ModelAdmin):
         ("Ιστορικό ειδοποιήσεων SMS (τελευταίες 10, μόνο για ανάγνωση)", {
             "fields": ("recent_notifications",),
             "description": "Εδώ βλέπεις αν όντως στάλθηκαν SMS για αυτή τη συσκευή, και τυχόν σφάλματα αποστολής.",
+        }),
+        ("Αυτόματα δεδομένα από πλησιέστερο μετεωρολογικό σταθμό (Τμήμα Μετεωρολογίας)", {
+            "fields": ("worksite_address", "worksite_latitude", "worksite_longitude", "agromet_station_code"),
+            "classes": ("agromet-fieldset",),
+            "description": "Γράψε μια διεύθυνση εργοταξίου- οι συντεταγμένες και ο πλησιέστερος σταθμός υπολογίζονται μόνοι τους όταν πατήσεις Save.",
         }),
     )
 

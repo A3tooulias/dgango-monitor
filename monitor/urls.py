@@ -17,4 +17,7 @@ urlpatterns = [
     path("api/heat-table/", views.HeatIndexRowListCreateView.as_view(), name="api-heat-table"),
     path("api/heat-table/<int:pk>/", views.HeatIndexRowDetailView.as_view(), name="api-heat-table-detail"),
     path("api/heat-table/load-moderate/", views.LoadModerateTableView.as_view(), name="api-heat-table-preset"),
+    path("api/settings/", views.SystemSettingsView.as_view(), name="api-settings"),
+    path("api/map-data/", views.MapDataView.as_view(), name="api-map-data"),
+    path("api/geocode-search/", views.GeocodeSearchView.as_view(), name="api-geocode-search"),
 ]

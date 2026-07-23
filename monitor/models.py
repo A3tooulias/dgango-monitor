@@ -15,7 +15,12 @@ class Device(models.Model):
     "κλειδί" που θα βάλεις στη ρύθμιση της συσκευής/αισθητήρα ώστε να μπορεί
     να στέλνει δεδομένα σε αυτόν τον server (header X-API-Key).
     """
-
+    data_source = models.CharField(
+        max_length=10,
+        choices=[("sensor", "Φυσικός αισθητήρας (API key / Ecowitt)"), ("agromet", "AgroMet (διεύθυνση εργοταξίου)")],
+        default="sensor",
+        help_text="Διάλεξε  τρόπο λήψης δεδομένων ανά συσκευή ",
+    )
     name = models.CharField(
         max_length=100,
         help_text='Πώς θα φαίνεται η συσκευή στο dashboard. π.χ. "Αποθήκη Α" ή "Εργοτάξιο Βόρεια πύλη".',
@@ -55,7 +60,14 @@ class Device(models.Model):
     last_humidity = models.FloatField(null=True, blank=True)
     last_signal_level = models.CharField(max_length=100, blank=True)
     last_severity = models.IntegerField(null=True, blank=True)
-
+    worksite_address = models.CharField(
+        max_length=255, blank=True,
+        help_text='Η διεύθυνση του εργοταξίου (π.χ. "Λεωφόρος Μακαρίου 25, Λευκωσία"). '
+                   'Οι συντεταγμένες και ο πλησιέστερος σταθμός υπολογίζονται αυτόματα.',
+    )
+    worksite_latitude = models.FloatField(null=True, blank=True, editable=False)
+    worksite_longitude = models.FloatField(null=True, blank=True, editable=False)
+    agromet_station_code = models.CharField(max_length=32, blank=True, default="", editable=False)
     def __str__(self):
         return f"{self.name} ({self.location})" if self.location else self.name
 
@@ -67,7 +79,25 @@ class Device(models.Model):
             return False
         cutoff = timezone.now() - timezone.timedelta(minutes=settings.DEVICE_OFFLINE_AFTER_MINUTES)
         return self.last_seen >= cutoff
+    
+class SystemSettings(models.Model):
+    """Μία και μοναδική γραμμή γενικών ρυθμίσεων του συστήματος."""
+    agromet_poll_minutes = models.PositiveIntegerField(
+        default=10, help_text="Κάθε πόσα λεπτά να ελέγχεται το AgroMet.",
+    )
 
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+class StationObservation(models.Model):
+    """Τελευταία γνωστή μέτρηση κάθε σταθμού AgroMet - για τον χάρτη."""
+    station_code = models.CharField(max_length=32, unique=True)
+    temperature = models.FloatField(null=True, blank=True)
+    humidity = models.FloatField(null=True, blank=True)
+    observed_at = models.CharField(max_length=64, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
 class RiskLevel(models.Model):
     """
