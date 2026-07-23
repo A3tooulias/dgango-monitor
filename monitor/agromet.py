@@ -134,6 +134,32 @@ def geocode_address(address):
     return float(results[0]["lat"]), float(results[0]["lon"])
 
 
+def _short_label(result):
+    """
+    Φτιάχνει ένα σύντομο, καθαρό όνομα (π.χ. "Λεωφόρος Πανεπιστημίου 8,
+    Αγλαντζιά, Λευκωσία") από τα δομημένα στοιχεία διεύθυνσης του Nominatim,
+    αντί για το πλήρες display_name που έχει περιττές επαναλήψεις
+    ("Κύπρος, Κύπρος - Kıbrıs" κλπ) - μόνο για εμφάνιση στη λίστα προτάσεων.
+    """
+    addr = result.get("address", {})
+    parts = []
+
+    road = addr.get("road")
+    house_number = addr.get("house_number")
+    if road:
+        parts.append(f"{road} {house_number}" if house_number else road)
+
+    locality = addr.get("suburb") or addr.get("city_district") or addr.get("neighbourhood")
+    if locality:
+        parts.append(locality)
+
+    city = addr.get("city") or addr.get("town") or addr.get("village")
+    if city and city != locality:
+        parts.append(city)
+
+    return ", ".join(parts) if parts else result["display_name"]
+
+
 def search_addresses(query, limit=5):
     """
     Επιστρέφει έως `limit` πιθανές διευθύνσεις που ταιριάζουν στο query (π.χ.
@@ -153,7 +179,12 @@ def search_addresses(query, limit=5):
     response.raise_for_status()
     results = response.json()
     return [
-        {"display_name": r["display_name"], "lat": float(r["lat"]), "lon": float(r["lon"])}
+        {
+            "display_name": r["display_name"],  # πλήρες - αποθηκεύεται, εγγυάται σωστή επανα-γεωκωδικοποίηση
+            "short_label": _short_label(r),  # σύντομο - μόνο για εμφάνιση στη λίστα
+            "lat": float(r["lat"]),
+            "lon": float(r["lon"]),
+        }
         for r in results
     ]
 
